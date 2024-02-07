@@ -44,9 +44,13 @@ public final class Constants {
     /**
      * PMW Ports.
      */
-    public static class PWMPort{
-      public static final int LED = 1;
-      public static final int LightningLED = 2;
+    public static class PWMPort {
+      public static final int LED = 2;
+    }
+
+    public static class LEDSegment {
+      public static final int STATUS_FIRST_LED = 0;
+      public static final int STATUS_LED_COUNT = 9;
     }
 
     /**
@@ -66,15 +70,25 @@ public final class Constants {
       new Rotation3d(0, Math.toRadians(13.3), Math.toRadians(180))
     );
 
+    public static final Transform3d NOTE_CAMERA_TO_ROBOT = new Transform3d();  //TODO get real constant
+
+    /**
+     * Digital I/O port numbers.
+     */
+    public static class DigitalIO {
+      public static final int INDEXER_BEAM_BREAK = 0; //check if beam is applicable
+    }
+
     /**
      * CAN Ids
      */
     public static class CAN {
       public static class SparkMax {
-        public static final int SHOOTER_PORT = 16;
-        public static final int INTAKE_PORT = 17; // TODO assign actual port
-        public static final int ARM_LEFT_PORT = 18; // TODO assign actual port
-        public static final int ARM_RIGHT_PORT = 19; // TODO assign actual port
+        public static final int SHOOTER_PORT = 59;
+        public static final int INTAKE_PORT = 60; // TODO assign actual port
+        public static final int ARM_LEFT_PORT = 61; // TODO assign actual port
+        public static final int ARM_RIGHT_PORT = 62; // TODO assign actual port
+        public static final int INDEXER_PORT = 63; //TODO assign actual port
       }
     }
 
@@ -99,16 +113,17 @@ public final class Constants {
   }
     public static class ColorConstants {
       public static final Color8Bit BLACK = new Color8Bit(0,0,0);
-      public static final Color8Bit RED = new Color8Bit(204,0,0);
-      public static final Color8Bit ORANGE = new Color8Bit(204,84,0);
-      public static final Color8Bit YELLOW = new Color8Bit(192,192,0);
+      public static final Color8Bit WHITE = new Color8Bit(200, 200, 200);
+      public static final Color8Bit RED = new Color8Bit(255,0,0);
+      public static final Color8Bit ORANGE = new Color8Bit(255,119,0);
+      public static final Color8Bit YELLOW = new Color8Bit(255,165,0);
       public static final Color8Bit GREEN = new Color8Bit(0,204,0);
       public static final Color8Bit BLUE = new Color8Bit(0,0,204);
-      public static final Color8Bit PURPLE = new Color8Bit(152, 16, 201);
-      public static final Color8Bit PINK = new Color8Bit(252,5,141);
+      public static final Color8Bit PURPLE = new Color8Bit(238, 80, 255);
+      public static final Color8Bit PINK = new Color8Bit(255,5,100);
       public static final Color8Bit LIGHTBLUE = new Color8Bit(56,197,252);
 
-      public static final Color8Bit COLORS[] = { RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE, PINK, LIGHTBLUE };
+      public static final Color8Bit COLORS[] = { BLACK, WHITE, RED, ORANGE, YELLOW, GREEN, BLUE, LIGHTBLUE, PURPLE, PINK};
 
      }
     

@@ -23,6 +23,7 @@ import edu.wpi.first.cscore.VideoSource;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
@@ -41,7 +42,7 @@ import frc.robot.Constants.RobotConstants;
  * PhotonVision.
  */
 
-@RobotPreferencesLayout(groupName = "AprilTag", row = 1, column = 4, width = 2, height = 1)
+@RobotPreferencesLayout(groupName = "AprilTag", row = 0, column = 4, width = 2, height = 2)
 public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
   public static final Matrix<N3, N1> SINGLE_TAG_STD_DEVS = VecBuilder.fill(4, 4, 8);
   public static final Matrix<N3, N1> MULTI_TAG_STD_DEVS = VecBuilder.fill(0.5, 0.5, 1);
@@ -182,6 +183,10 @@ public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
     return alliance == Alliance.Red ? 5 : 6;
   }
 
+  public Pose3d getAprilTagPose(int id) {
+    return aprilTagLayout.getTagPose(id).get();
+  }
+
   @Override
   public void periodic() {
     super.periodic();
@@ -205,8 +210,8 @@ public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
     targetLayout.addDouble("Distance", () -> getDistanceToTarget(aprilTagIdChooser.getSelected()));
     targetLayout.addDouble("Angle", () -> getAngleToTarget(aprilTagIdChooser.getSelected()));
 
-    VideoSource video = new HttpCamera("photonvision_Port_1182_Output_MJPEG_Server",
-        "http://photonvision.local:1182/?action=stream",
+    VideoSource video = new HttpCamera("photonvision_Port_1184_Output_MJPEG_Server",
+        "http://photonvision.local:1184/?action=stream",
         HttpCameraKind.kMJPGStreamer);
     visionTab.add("April Tag", video)
         .withWidget(BuiltInWidgets.kCameraStream)
