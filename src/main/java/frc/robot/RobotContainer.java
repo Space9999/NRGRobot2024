@@ -13,20 +13,20 @@ import java.util.Set;
 import com.nrg948.preferences.RobotPreferences;
 import com.nrg948.preferences.RobotPreferencesLayout;
 
-import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.RobotConstants.OperatorConstants;
-import frc.robot.commands.AlignToAmp;
+import frc.robot.commands.ArmCommands;
+import frc.robot.commands.DriveCommands;
 import frc.robot.commands.DriveUsingController;
+import frc.robot.commands.InterruptAll;
 import frc.robot.commands.LEDs;
+import frc.robot.commands.ManualArmController;
 import frc.robot.commands.Pathfinding;
-import frc.robot.commands.SysID;
 import frc.robot.subsystems.Subsystems;
 
 /**
@@ -40,14 +40,6 @@ import frc.robot.subsystems.Subsystems;
  */
 @RobotPreferencesLayout(groupName = "Preferences", column = 0, row = 0, width = 2, height = 1)
 public class RobotContainer {
-  // Joystick and Joystick Buttons
-    private final Joystick joystick = new Joystick(3);
-
-    private JoystickButton joyButton1 = new JoystickButton(joystick, 1);
-    private JoystickButton joyButton2 = new JoystickButton(joystick, 9);
-    private JoystickButton joyButton3 = new JoystickButton(joystick, 10);
-    private JoystickButton joyButton4 = new JoystickButton(joystick, 11);
-    private JoystickButton joyButton5 = new JoystickButton(joystick, 12);
   // The robot's subsystems and commands are defined here...
   private final Subsystems m_subsystems = new Subsystems();
 
@@ -57,6 +49,8 @@ public class RobotContainer {
   // Replace with CommandPS4Controller or CommandJoystick if needed
   private final CommandXboxController m_driverController = new CommandXboxController(
       OperatorConstants.XboxControllerPort.DRIVER);
+  private final CommandXboxController m_operatorController = new CommandXboxController(
+      OperatorConstants.XboxControllerPort.MANIPULATOR);
 
   /**
    * The container for the robot. Contains subsystems, OI devices, and commands.
@@ -64,6 +58,7 @@ public class RobotContainer {
   public RobotContainer() {
 
     m_subsystems.drivetrain.setDefaultCommand(new DriveUsingController(m_subsystems, m_driverController));
+    m_subsystems.armSubsystem.setDefaultCommand(new ManualArmController(m_subsystems, m_operatorController));
     
     // Configure the trigger bindings
     configureBindings();
@@ -90,12 +85,17 @@ public class RobotContainer {
     // Schedule `exampleMetdhodCommand` when the Xbox controller's B button is
     // pressed,
     // cancelling on release.
-    m_driverController.start().onTrue(Commands.runOnce(() -> m_subsystems.drivetrain.resetOrientation(), m_subsystems.drivetrain));
-    m_driverController.back().whileTrue(SysID.getSwerveDriveCharacterizationSequence(m_subsystems));
-    m_driverController.leftBumper().whileTrue(SysID.getSwerveSteeringCharacterizationSequence(m_subsystems));
-    m_driverController.a().onTrue(Pathfinding.pathFindToSpeakerFront(m_subsystems));
-    m_driverController.y().onTrue(Commands.defer(() -> AlignToAmp.driveToAmp(m_subsystems), 
+    m_driverController.start().onTrue(DriveCommands.resetOrientation(m_subsystems));
+    m_driverController.back().onTrue(new InterruptAll(m_subsystems));
+    m_driverController.a().onTrue(Pathfinding.pathFindToSpeakerFront());
+    m_driverController.y().onTrue(Commands.defer(() -> DriveCommands.driveToAmp(m_subsystems), 
       Set.of(m_subsystems.drivetrain, m_subsystems.aprilTag)));
+
+    m_operatorController.povUp().onTrue(ArmCommands.seekToTrap(m_subsystems));
+    m_operatorController.povRight().onTrue(ArmCommands.seekToAmp(m_subsystems));
+    m_operatorController.povDown().onTrue(ArmCommands.stow(m_subsystems));
+    m_operatorController.povLeft().onTrue(ArmCommands.disableSeek(m_subsystems));
+
 
     Trigger noteDetected = new Trigger(m_subsystems.indexerSubsystem::isNoteDetected);
     noteDetected.onTrue(LEDs.fillColor(m_subsystems.addressableLEDSubsystem, ORANGE));
@@ -125,5 +125,6 @@ public class RobotContainer {
     m_subsystems.drivetrain.addShuffleboardTab();
     m_subsystems.aprilTag.addShuffleboardTab();
     m_subsystems.noteVision.addShuffleboardTab();
+    m_subsystems.armSubsystem.addShuffleBoardTab();
   }
 }
