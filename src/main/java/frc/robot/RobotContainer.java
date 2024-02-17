@@ -8,15 +8,12 @@ package frc.robot;
 import static frc.robot.Constants.ColorConstants.ORANGE;
 import static frc.robot.Constants.ColorConstants.RED;
 
-import java.util.Set;
-
 import com.nrg948.preferences.RobotPreferences;
 import com.nrg948.preferences.RobotPreferencesLayout;
 
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.RobotConstants.OperatorConstants;
@@ -28,6 +25,8 @@ import frc.robot.commands.InterruptAll;
 import frc.robot.commands.LEDs;
 import frc.robot.commands.ManualArmController;
 import frc.robot.commands.Pathfinding;
+import frc.robot.subsystems.ArmSubsystem;
+import frc.robot.subsystems.IndexerSubsystem;
 import frc.robot.subsystems.Subsystems;
 
 /**
@@ -129,6 +128,19 @@ public class RobotContainer {
     m_subsystems.drivetrain.addShuffleboardTab();
     m_subsystems.aprilTag.addShuffleboardTab();
     m_subsystems.noteVision.addShuffleboardTab();
-    m_subsystems.armSubsystem.addShuffleBoardTab();
+    
+    if (ArmSubsystem.ENABLE_TAB.getValue()) {
+      ShuffleboardTab armShooterTab = Shuffleboard.getTab("Arm+Shooter");
+      
+      m_subsystems.armSubsystem.addShuffleboardLayout(armShooterTab);
+      m_subsystems.shooter.addShuffleboardLayout(armShooterTab);
+    }
+    
+    if (IndexerSubsystem.ENABLE_TAB.getValue()) {
+      ShuffleboardTab intakeIndexerTab = Shuffleboard.getTab("Indexer+Intake");
+
+      m_subsystems.intake.addShuffleboardLayout(intakeIndexerTab);
+      m_subsystems.indexerSubsystem.addShuffleboardLayout(intakeIndexerTab);
+    }
   }
 }

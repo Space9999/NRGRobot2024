@@ -5,10 +5,16 @@
 package frc.robot.subsystems;
 
 import com.revrobotics.CANSparkFlex;
+import com.revrobotics.RelativeEncoder;
+import com.nrg948.preferences.RobotPreferences;
+import com.nrg948.preferences.RobotPreferencesValue;
 import com.revrobotics.CANSparkBase.IdleMode;
 import com.revrobotics.CANSparkLowLevel.MotorType;
 
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
+import edu.wpi.first.wpilibj.shuffleboard.BuiltInLayouts;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardLayout;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.RobotConstants;
 import frc.robot.Constants.RobotConstants.CAN;
@@ -20,20 +26,29 @@ import frc.robot.parameters.MotorParameters;
  */
 public class IntakeSubsystem extends SubsystemBase {
   private final CANSparkFlex motor = new CANSparkFlex(CAN.SparkMax.INTAKE_PORT, MotorType.kBrushless);
+  private final RelativeEncoder encoder = motor.getEncoder();
   private boolean isEnabled = false;
-  private double goalRPM;
+  private double goalVelocity;
+  private double currentVelocity;
 
-  public static double GEAR_RATIO = 1.0; // TODO: get gear ratio once mech built
+  public static double GEAR_RATIO = 3*26/24; 
+  public static double INTAKE_DIAMETER = 0.036; // Diameter in meters
+  public static double ENCODER_CONVERSION_FACTOR = (Math.PI * INTAKE_DIAMETER) / GEAR_RATIO;
 
-  public static double MAX_RPM = MotorParameters.NeoV1_1.getFreeSpeedRPM() / GEAR_RATIO;
-  public static double MAX_ACCELERATION = (2 * MotorParameters.NeoV1_1.getStallTorque() * GEAR_RATIO)
+  public static double MAX_VELOCITY = (MotorParameters.NeoV1_1.getFreeSpeedRPM() * Math.PI * INTAKE_DIAMETER) / (GEAR_RATIO * 60);
+  public static double MAX_ACCELERATION = (2 * MotorParameters.NeoV1_1.getStallTorque() * GEAR_RATIO * Math.PI * INTAKE_DIAMETER) 
       / RobotConstants.INDEXER_MASS;
 
   public static double KS = 0.15;
-  public static double KV = (RobotConstants.MAX_BATTERY_VOLTAGE - KS) / MAX_RPM;
+  public static double KV = (RobotConstants.MAX_BATTERY_VOLTAGE - KS) / MAX_VELOCITY;
   public static double KA = (RobotConstants.MAX_BATTERY_VOLTAGE - KS) / MAX_ACCELERATION;
 
+  @RobotPreferencesValue
+  public static final RobotPreferences.DoubleValue INTAKE_VELOCITY = new RobotPreferences.DoubleValue("Indexer+Intake",
+      "Indexer Intake Velocity", 0.2);
+
   private final SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(KS, KV, KA);
+
 
 
   /** Creates a
@@ -41,6 +56,8 @@ public class IntakeSubsystem extends SubsystemBase {
   public IntakeSubsystem() {
     motor.setIdleMode(IdleMode.kBrake);
     motor.setInverted(true);
+    encoder.setVelocityConversionFactor(ENCODER_CONVERSION_FACTOR);
+    encoder.setPositionConversionFactor(ENCODER_CONVERSION_FACTOR);
   }
 
   /**
@@ -64,7 +81,7 @@ public class IntakeSubsystem extends SubsystemBase {
    */
   public void in() {
     isEnabled = true;
-    goalRPM = IndexerSubsystem.INDEXER_INTAKE_RPM.getValue();
+    goalVelocity = IntakeSubsystem.INTAKE_VELOCITY.getValue();
   }
 
   /**
@@ -72,7 +89,7 @@ public class IntakeSubsystem extends SubsystemBase {
    */
   public void out() {
     isEnabled = true;
-    goalRPM = -IndexerSubsystem.INDEXER_INTAKE_RPM.getValue();
+    goalVelocity = -IntakeSubsystem.INTAKE_VELOCITY.getValue();
   }
 
   /**
@@ -85,9 +102,19 @@ public class IntakeSubsystem extends SubsystemBase {
 
   @Override
   public void periodic() {
+    currentVelocity = encoder.getVelocity();
     if (isEnabled) {
-      double feedforward = this.feedforward.calculate(goalRPM);
+      double feedforward = this.feedforward.calculate(goalVelocity);
       motor.setVoltage(feedforward);
     }
+  }
+
+  public void addShuffleboardLayout(ShuffleboardTab tab) {
+    ShuffleboardLayout layout = tab.getLayout("Intake", BuiltInLayouts.kList)
+      .withPosition(0, 0)
+      .withSize(2, 3);
+    layout.addDouble("Goal Velocity", () -> goalVelocity);
+    layout.addDouble("Current Velocity", () -> currentVelocity);
+    layout.addBoolean("Enabled", () -> isEnabled);
   }
 }
