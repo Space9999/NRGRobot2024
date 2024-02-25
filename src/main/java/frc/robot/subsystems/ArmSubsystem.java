@@ -17,41 +17,64 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.ArmFeedforward;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.networktables.GenericEntry;
 import edu.wpi.first.wpilibj.DutyCycleEncoder;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.shuffleboard.BuiltInLayouts;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardLayout;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.Constants.RobotConstants;
+import frc.robot.commands.ArmCommands;
 import frc.robot.parameters.MotorParameters;
+import java.util.Map;
+import java.util.Set;
 
-@RobotPreferencesLayout(groupName = "Arm+Shooter", row = 0, column = 2, width = 2, height = 1)
+@RobotPreferencesLayout(groupName = "Arm+Shooter", column = 5, row = 0, width = 1, height = 3)
 public class ArmSubsystem extends SubsystemBase {
+
   @RobotPreferencesValue
   public static final RobotPreferences.BooleanValue ENABLE_TAB =
       new RobotPreferences.BooleanValue("Arm+Shooter", "Enable Tab", false);
 
-  public static final double GEAR_RATIO = 168.0;
-  public static final double MASS = 0.5; // TODO determine actual arm mass
+  @RobotPreferencesValue
+  public static final RobotPreferences.DoubleValue KP =
+      new RobotPreferences.DoubleValue("Arm+Shooter", "kP", 3.0);
+
+  @RobotPreferencesValue
+  public static RobotPreferences.DoubleValue AMP_ANGLE =
+      new RobotPreferences.DoubleValue("Arm+Shooter", "Amp Angle", 8.0);
+
+  @RobotPreferencesValue
+  public static RobotPreferences.DoubleValue TRAP_ANGLE =
+      new RobotPreferences.DoubleValue("Arm+Shooter", "Trap Angle", 45);
+
+  public static final double GEAR_RATIO = (5 * 4 * 3 * 42 / 15.0);
+  public static final double MASS = 10.5;
   public static final double RADIANS_PER_REVOLUTION = (2 * Math.PI) / GEAR_RATIO;
   public static final MotorParameters MOTOR = MotorParameters.NeoV1_1;
+  public static final double EFFICIENCY = 1.0;
   public static final double MAX_ANGULAR_SPEED =
-      MOTOR.getFreeSpeedRPM() * RADIANS_PER_REVOLUTION / 60.0;
+      EFFICIENCY * MOTOR.getFreeSpeedRPM() * RADIANS_PER_REVOLUTION / 60.0;
+  public static final double ARM_LENGTH = 0.55;
   public static final double MAX_ANGULAR_ACCELERATION =
-      (2 * MOTOR.getStallTorque() * GEAR_RATIO) / MASS;
+      EFFICIENCY * ((2 * MOTOR.getStallTorque() * GEAR_RATIO) / (MASS * ARM_LENGTH));
   public static final TrapezoidProfile.Constraints CONSTRAINTS =
-      new TrapezoidProfile.Constraints(MAX_ANGULAR_SPEED * 0.5, MAX_ANGULAR_ACCELERATION);
-  public static final double KS = 3.0;
+      new TrapezoidProfile.Constraints(MAX_ANGULAR_SPEED * 0.2, MAX_ANGULAR_ACCELERATION * 0.5);
+  public static final double KS = 0.15;
   public static final double KV = (RobotConstants.MAX_BATTERY_VOLTAGE - KS) / MAX_ANGULAR_SPEED;
   public static final double KA =
       (RobotConstants.MAX_BATTERY_VOLTAGE - KS) / MAX_ANGULAR_ACCELERATION;
-  public static final double KG = 0; // KA * 9.81;
-  public static final double STOWED_ANGLE = -31.3;
-  public static final double ARM_RADIANS_PER_MOTOR_ROTATION = (2 * Math.PI) / GEAR_RATIO;
-  private static final double LOWER_ANGLE_LIMIT = Math.toRadians(-27);
-  private static final double UPPER_ANGLE_LIMIT = Math.toRadians(80);
+  public static final double KG = KA * 9.81;
+  private static final double CG_ANGLE_OFFSET = Math.toRadians(7.0);
+  public static final double STOWED_ANGLE = Math.toRadians(-11.0);
+  private static final double NEARLY_STOWED_ANGLE = STOWED_ANGLE + Math.toRadians(1.5);
+  private static final double ARM_RADIANS_PER_MOTOR_ROTATION = (2 * Math.PI) / GEAR_RATIO;
+  private static final double LOWER_ANGLE_LIMIT = STOWED_ANGLE;
+  private static final double UPPER_ANGLE_LIMIT = Math.toRadians(70);
+  private static final double ANGLE_TOLERANCE = Math.toRadians(.5);
 
   private final CANSparkMax leftMotor =
       new CANSparkMax(RobotConstants.CAN.SparkMax.ARM_LEFT_PORT, MotorType.kBrushless);
@@ -62,25 +85,29 @@ public class ArmSubsystem extends SubsystemBase {
   private final DutyCycleEncoder absoluteEncoder =
       new DutyCycleEncoder(Constants.RobotConstants.DigitalIO.ARM_ABSOLUTE_ENCODER);
 
-  private double rawAngleOffset = Math.toRadians(9.15);
+  private double rawAngleOffset = Math.toRadians(7.39);
 
   private double currentAngle = STOWED_ANGLE;
+  private double currentGoal = STOWED_ANGLE;
 
-  private final ArmFeedforward feedForward = new ArmFeedforward(KS, KV, KA, KG);
+  private double currentMotorVoltage = 0;
+
+  private final ArmFeedforward feedForward = new ArmFeedforward(KS, KG, KV, KA);
   private final ProfiledPIDController controller =
-      new ProfiledPIDController(35.0, 0.0, 0.0, CONSTRAINTS);
+      new ProfiledPIDController(KP.getValue(), 0.0, 0.0, CONSTRAINTS);
   private boolean enablePeriodicControl = false;
 
   /** Creates a new ArmSubsystem. */
   public ArmSubsystem() {
     rightMotor.follow(leftMotor, true);
-    leftMotor.setIdleMode(IdleMode.kCoast); // TODO kBreak
-    rightMotor.setIdleMode(IdleMode.kCoast); // TODO kBreak
+    leftMotor.setIdleMode(IdleMode.kBrake);
+    rightMotor.setIdleMode(IdleMode.kBrake);
     leftEncoder.setPositionConversionFactor(ARM_RADIANS_PER_MOTOR_ROTATION);
     leftEncoder.setVelocityConversionFactor(ARM_RADIANS_PER_MOTOR_ROTATION);
     absoluteEncoder.setDutyCycleRange(1.0 / 1025.0, 1024.0 / 1025.0);
     absoluteEncoder.setDistancePerRotation(2 * Math.PI);
     controller.enableContinuousInput(-Math.PI, Math.PI);
+    controller.setTolerance(ANGLE_TOLERANCE);
 
     System.out.println("Arm max velocity: " + Math.toDegrees(MAX_ANGULAR_SPEED));
     System.out.println("Arm max accel: " + Math.toDegrees(MAX_ANGULAR_ACCELERATION));
@@ -92,7 +119,13 @@ public class ArmSubsystem extends SubsystemBase {
    * @param goalAngle The goal angle in radians.
    */
   public void setGoalAngle(double goalAngle) {
+    setGoalAngleContinous(goalAngle);
     controller.reset(currentAngle);
+    controller.setP(KP.getValue());
+  }
+
+  public void setGoalAngleContinous(double goalAngle) {
+    this.currentGoal = goalAngle;
     controller.setGoal(goalAngle);
     enablePeriodicControl = true;
   }
@@ -101,6 +134,7 @@ public class ArmSubsystem extends SubsystemBase {
   public void disable() {
     enablePeriodicControl = false;
     leftMotor.stopMotor();
+    currentMotorVoltage = 0;
   }
 
   /** Returns whether the arm is at the goal angle. */
@@ -130,6 +164,7 @@ public class ArmSubsystem extends SubsystemBase {
     }
 
     leftMotor.setVoltage(voltage);
+    currentMotorVoltage = voltage;
   }
 
   /**
@@ -148,17 +183,49 @@ public class ArmSubsystem extends SubsystemBase {
     currentAngle = MathUtil.angleModulus(rawAngleOffset - absoluteEncoder.getDistance());
 
     if (enablePeriodicControl) {
-      double feedback = controller.calculate(currentAngle);
-      double feedForward =
-          this.feedForward.calculate(currentAngle, controller.getSetpoint().velocity);
-      setMotorVoltages(feedForward + feedback);
+      // Turn off PID when nearly stowed
+      if (currentAngle <= NEARLY_STOWED_ANGLE && currentGoal <= STOWED_ANGLE) {
+        disable();
+      } else {
+        double feedback = controller.calculate(currentAngle);
+        double feedForward =
+            this.feedForward.calculate(
+                currentAngle + CG_ANGLE_OFFSET, controller.getSetpoint().velocity);
+        setMotorVoltages(feedForward + feedback);
+      }
     }
   }
 
-  public void addShuffleboardLayout(ShuffleboardTab tab) {
+  public void addShuffleboardLayout(ShuffleboardTab tab, Subsystems subsystems) {
     ShuffleboardLayout infolayout =
-        tab.getLayout("Arm Info", BuiltInLayouts.kList).withPosition(0, 0).withSize(2, 4);
-    infolayout.addDouble("Current Angle", () -> Math.toDegrees(getAngle()));
-    infolayout.addDouble("Goal Angle", () -> Math.toDegrees(controller.getGoal().position));
+        tab.getLayout("Arm Info", BuiltInLayouts.kGrid)
+            .withPosition(0, 0)
+            .withSize(2, 4)
+            .withProperties(Map.of("Number of columns", 3, "Number of rows", 4));
+    infolayout
+        .addDouble("Current Angle", () -> Math.toDegrees(getAngle()))
+        .withPosition(0, 0)
+        .withSize(1, 1);
+    infolayout
+        .addDouble("Goal Angle", () -> Math.toDegrees(controller.getGoal().position))
+        .withPosition(1, 0)
+        .withSize(1, 1);
+    infolayout.addDouble("Voltage", () -> currentMotorVoltage).withPosition(2, 0).withSize(1, 1);
+    infolayout.add("Max Velocity", MAX_ANGULAR_SPEED).withPosition(0, 1).withSize(1, 1);
+    infolayout.add("Max Accel", MAX_ANGULAR_ACCELERATION).withPosition(1, 1).withSize(1, 1);
+    infolayout.addBoolean("Enabled", () -> enablePeriodicControl).withPosition(2, 1).withSize(1, 1);
+    infolayout.add("KV", KV).withPosition(0, 2).withSize(1, 1);
+    infolayout.add("KA", KA).withPosition(1, 2).withSize(1, 1);
+    infolayout.add("KG", KG).withPosition(2, 2).withSize(1, 1);
+
+    ShuffleboardLayout controlLayout =
+        tab.getLayout("Arm Control", BuiltInLayouts.kList).withPosition(2, 0).withSize(2, 4);
+    GenericEntry armAngle = controlLayout.add("Arm Angle", 0).getEntry();
+    controlLayout.add(
+        Commands.defer(
+            () ->
+                ArmCommands.seekToAngle(subsystems, Math.toRadians(armAngle.getDouble(ARM_LENGTH)))
+                    .until(() -> this.atGoalAngle()),
+            Set.of(subsystems.arm)));
   }
 }

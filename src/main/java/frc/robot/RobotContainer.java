@@ -16,17 +16,18 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.RobotConstants.OperatorConstants;
 import frc.robot.commands.ArmCommands;
 import frc.robot.commands.DriveCommands;
 import frc.robot.commands.DriveUsingController;
-import frc.robot.commands.IntakeUsingController;
 import frc.robot.commands.InterruptAll;
 import frc.robot.commands.LEDs;
-import frc.robot.commands.ManualArmController;
+import frc.robot.commands.NoteCommands;
 import frc.robot.commands.Pathfinding;
+import frc.robot.commands.SetShooterContinous;
 import frc.robot.subsystems.ArmSubsystem;
 import frc.robot.subsystems.IndexerSubsystem;
 import frc.robot.subsystems.Subsystems;
@@ -37,7 +38,7 @@ import frc.robot.subsystems.Subsystems;
  * periodic methods (other than the scheduler calls). Instead, the structure of the robot (including
  * subsystems, commands, and trigger mappings) should be declared here.
  */
-@RobotPreferencesLayout(groupName = "Preferences", column = 0, row = 0, width = 2, height = 1)
+@RobotPreferencesLayout(groupName = "Preferences", column = 0, row = 0, width = 1, height = 1)
 public class RobotContainer {
   // The robot's subsystems and commands are defined here...
   private final Subsystems subsystems = new Subsystems();
@@ -58,8 +59,11 @@ public class RobotContainer {
     DriverStation.silenceJoystickConnectionWarning(true);
 
     subsystems.drivetrain.setDefaultCommand(new DriveUsingController(subsystems, driverController));
-    subsystems.arm.setDefaultCommand(new ManualArmController(subsystems, operatorController));
-    subsystems.intake.setDefaultCommand(new IntakeUsingController(subsystems, operatorController));
+    // subsystems.arm.setDefaultCommand(new ManualArmController(subsystems, operatorController));
+    // subsystems.intake.setDefaultCommand(new IntakeUsingController(subsystems,
+    // operatorController));
+    // subsystems.shooter.setDefaultCommand(new ShootUsingController(subsystems.shooter,
+    // operatorController));
 
     // Configure the trigger bindings
     configureBindings();
@@ -77,20 +81,27 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
-
-    // Schedule `exampleMetdhodCommand` when the Xbox controller's B button is
-    // pressed,
-    // cancelling on release.
     driverController.start().onTrue(DriveCommands.resetOrientation(subsystems));
     driverController.back().onTrue(new InterruptAll(subsystems));
     driverController.a().onTrue(Pathfinding.pathFindToSpeakerFront());
     driverController.b().whileTrue(Pathfinding.pathFindToAmp());
     driverController.y().whileTrue(Pathfinding.pathFindToAmp2());
 
+    operatorController.back().onTrue(new InterruptAll(subsystems));
+    operatorController.b().whileTrue(new SetShooterContinous(subsystems));
     operatorController.povUp().onTrue(ArmCommands.seekToTrap(subsystems));
     operatorController.povRight().onTrue(ArmCommands.seekToAmp(subsystems));
     operatorController.povDown().onTrue(ArmCommands.stow(subsystems));
     operatorController.povLeft().onTrue(ArmCommands.disableSeek(subsystems));
+    operatorController.leftBumper().whileTrue(NoteCommands.autoCenterNote(subsystems));
+    operatorController.rightBumper().whileTrue(NoteCommands.intakeUntilNoteDetected(subsystems));
+    operatorController.leftTrigger().whileTrue(NoteCommands.outtake(subsystems));
+    operatorController
+        .rightTrigger()
+        .whileTrue(
+            Commands.sequence(
+                NoteCommands.intakeUntilNoteDetected(subsystems, false),
+                NoteCommands.autoCenterNote(subsystems)));
 
     Trigger noteDetected = new Trigger(subsystems.indexer::isNoteDetected);
     noteDetected.onTrue(LEDs.fillColor(subsystems.addressableLED, ORANGE));
@@ -108,21 +119,28 @@ public class RobotContainer {
 
   public void disabledInit() {
     coastModeTimer.restart();
+    subsystems.intake.disable();
+    subsystems.indexer.disable();
+    subsystems.shooter.disable();
+    subsystems.arm.disable();
   }
 
   public void disabledPeriodic() {
     if (coastModeTimer.advanceIfElapsed(3)) {
       subsystems.drivetrain.setBrakeMode(false);
+      subsystems.indexer.setBrakeMode(false);
       coastModeTimer.stop();
     }
   }
 
   public void autonomousInit() {
     subsystems.drivetrain.setBrakeMode(true);
+    subsystems.indexer.setBrakeMode(true);
   }
 
   public void teleopInit() {
     subsystems.drivetrain.setBrakeMode(true);
+    subsystems.indexer.setBrakeMode(true);
   }
 
   public void periodic() {
@@ -143,8 +161,8 @@ public class RobotContainer {
     if (ArmSubsystem.ENABLE_TAB.getValue()) {
       ShuffleboardTab armShooterTab = Shuffleboard.getTab("Arm+Shooter");
 
-      subsystems.arm.addShuffleboardLayout(armShooterTab);
-      subsystems.shooter.addShuffleboardLayout(armShooterTab);
+      subsystems.arm.addShuffleboardLayout(armShooterTab, subsystems);
+      subsystems.shooter.addShuffleboardLayout(armShooterTab, subsystems);
     }
 
     if (IndexerSubsystem.ENABLE_TAB.getValue()) {

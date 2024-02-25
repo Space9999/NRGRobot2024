@@ -26,7 +26,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.RobotConstants;
 import frc.robot.parameters.MotorParameters;
 
-@RobotPreferencesLayout(groupName = "Indexer+Intake", column = 2, row = 1, width = 2, height = 3)
+@RobotPreferencesLayout(groupName = "Indexer+Intake", column = 0, row = 1, width = 1, height = 2)
 public class IndexerSubsystem extends SubsystemBase {
 
   public static double GEAR_RATIO = 3 * 26 / 15;
@@ -49,8 +49,7 @@ public class IndexerSubsystem extends SubsystemBase {
 
   @RobotPreferencesValue
   public static final RobotPreferences.DoubleValue FEED_VELOCITY =
-      new RobotPreferences.DoubleValue(
-          "Indexer+Intake", "Indexer Feed Velocity", 0.8 * MAX_VELOCITY);
+      new RobotPreferences.DoubleValue("Indexer+Intake", "Indexer Feed Velocity", 3.0);
 
   private boolean noteDetected = false;
   private boolean isEnabled = false;
@@ -60,7 +59,7 @@ public class IndexerSubsystem extends SubsystemBase {
   private final CANSparkMax motor =
       new CANSparkMax(RobotConstants.CAN.SparkMax.INDEXER_PORT, MotorType.kBrushless);
   private final RelativeEncoder encoder = motor.getEncoder();
-  private final SparkLimitSwitch beamBreak = motor.getForwardLimitSwitch(Type.kNormallyClosed);
+  private final SparkLimitSwitch beamBreak = motor.getForwardLimitSwitch(Type.kNormallyOpen);
   private final SimpleMotorFeedforward indexerFeedfoward = new SimpleMotorFeedforward(KS, KV, KA);
 
   private final BooleanLogEntry noteDetectedLogger =
@@ -71,6 +70,7 @@ public class IndexerSubsystem extends SubsystemBase {
   /** Creates a new IndexerSubsystem. */
   public IndexerSubsystem() {
     motor.setIdleMode(IdleMode.kBrake);
+    motor.setInverted(true);
     encoder.setVelocityConversionFactor(ENCODER_CONVERSION_FACTOR);
     encoder.setPositionConversionFactor(ENCODER_CONVERSION_FACTOR);
     beamBreak.enableLimitSwitch(false);
@@ -101,8 +101,8 @@ public class IndexerSubsystem extends SubsystemBase {
     motor.stopMotor();
   }
 
-  public void runMotor(double power) {
-    motor.set(power);
+  public void setMotorVoltage(double voltage) {
+    motor.setVoltage(voltage);
   }
 
   @Override
@@ -121,6 +121,17 @@ public class IndexerSubsystem extends SubsystemBase {
       goalVelocityLogger.append(goalVelocity);
       motor.setVoltage(voltage);
     }
+  }
+
+  public void setBrakeMode(boolean brakeMode) {
+    IdleMode idleMode;
+
+    if (brakeMode) {
+      idleMode = IdleMode.kBrake;
+    } else {
+      idleMode = IdleMode.kCoast;
+    }
+    motor.setIdleMode(idleMode);
   }
 
   public void addShuffleboardLayout(ShuffleboardTab tab) {
