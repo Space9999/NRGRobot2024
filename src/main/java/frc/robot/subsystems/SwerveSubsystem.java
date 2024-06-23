@@ -20,6 +20,7 @@ import com.nrg948.preferences.RobotPreferencesValue;
 import com.revrobotics.CANSparkBase.IdleMode;
 import com.revrobotics.CANSparkLowLevel.MotorType;
 import com.revrobotics.CANSparkMax;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.controller.HolonomicDriveController;
 import edu.wpi.first.math.controller.PIDController;
@@ -29,6 +30,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
@@ -56,15 +58,27 @@ import frc.robot.parameters.SwerveMotors;
 import frc.robot.util.SwerveModuleVelocities;
 import frc.robot.util.SwerveModuleVoltages;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
 
-@RobotPreferencesLayout(groupName = "Drive", column = 1, row = 0, width = 2, height = 2)
+@RobotPreferencesLayout(
+    groupName = "Drive",
+    column = 1,
+    row = 0,
+    width = 3,
+    height = 2,
+    type = "Grid Layout",
+    gridColumns = 3,
+    gridRows = 2)
 public class SwerveSubsystem extends SubsystemBase {
-  @RobotPreferencesValue
+  private static final Rotation2d ROTATE_180_DEGREES = Rotation2d.fromDegrees(180);
+
+  @RobotPreferencesValue(column = 0, row = 0)
   public static RobotPreferences.EnumValue<SwerveDriveParameters> PARAMETERS =
       new RobotPreferences.EnumValue<SwerveDriveParameters>(
           "Drive", "Robot Base", SwerveDriveParameters.PracticeBase2024);
 
-  @RobotPreferencesValue
+  @RobotPreferencesValue(column = 1, row = 0)
   public static RobotPreferences.BooleanValue ENABLE_DRIVE_TAB =
       new RobotPreferences.BooleanValue("Drive", "Enable Tab", false);
 
@@ -148,10 +162,12 @@ public class SwerveSubsystem extends SubsystemBase {
   private final SwerveDrivePoseEstimator odometry;
 
   // The current sensor state updated by the periodic method.
-  private Rotation2d rawOrientation;
-  private Rotation2d rawOrientationOffset = new Rotation2d();
+  private double rawOrientation; // The raw gyro orientation in radians.
+  private double rawOrientationOffset; // The offset to the corrected orientation in radians.
   private Rotation2d orientation = new Rotation2d();
   private Pose2d lastVisionMeasurement = new Pose2d();
+  private Supplier<Optional<Rotation2d>> targetOrientationSupplier =
+      () -> Optional.empty(); // absolute location to keep the robot oriented to tag
 
   private DoubleLogEntry rawOrientationLog =
       new DoubleLogEntry(DataLogManager.getLog(), "/SwerveSubsystem/rawOrientation");
@@ -235,9 +251,10 @@ public class SwerveSubsystem extends SubsystemBase {
    * is up to date.
    */
   private void updateSensorState() {
-    rawOrientation = Rotation2d.fromDegrees(-ahrs.getAngle());
-    rawOrientationLog.append(rawOrientation.getDegrees());
-    orientation = rawOrientation.plus(rawOrientationOffset);
+    double rawGyroDegrees = -ahrs.getAngle();
+    rawOrientation = Math.toRadians(rawGyroDegrees);
+    rawOrientationLog.append(rawGyroDegrees);
+    orientation = new Rotation2d(MathUtil.angleModulus(rawOrientation + rawOrientationOffset));
   }
 
   /** See {@link SwerveDrivePoseEstimator#addVisionMeasurement(Pose2d, double)} */
@@ -250,6 +267,45 @@ public class SwerveSubsystem extends SubsystemBase {
       Pose2d visionMeasurment, double timestamp, Matrix<N3, N1> stdDevs) {
     odometry.addVisionMeasurement(visionMeasurment, timestamp, stdDevs);
     lastVisionMeasurement = visionMeasurment;
+  }
+
+  /**
+   * Sets the absolute location of the target to keep the robot oriented to.
+   *
+   * @param orientationTarget Target we want to orient to.
+   */
+  public void enableAutoOrientationTarget(Translation2d orientationTarget) {
+    this.targetOrientationSupplier =
+        () ->
+            Optional.of(
+                orientationTarget
+                    .minus(getPosition().getTranslation())
+                    .getAngle()
+                    .rotateBy(ROTATE_180_DEGREES));
+  }
+
+  /**
+   * Enables auto orientation mode.
+   *
+   * @param targetOrientationSupplier Supplies the target orientation.
+   */
+  public void enableAutoOrientation(Supplier<Optional<Rotation2d>> targetOrientationSupplier) {
+    this.targetOrientationSupplier = targetOrientationSupplier;
+  }
+
+  /** Clears the orientation target. */
+  public void disableAutoOrientation() {
+    targetOrientationSupplier = () -> Optional.empty();
+  }
+
+  /**
+   * Returns the desired orientation when an orientation target is set.
+   *
+   * @return Returns an Optional<Rotation2d> when an orientation target is set. Otherwise, this
+   *     method returns Optional.empty().
+   */
+  public Optional<Rotation2d> getTargetOrientation() {
+    return targetOrientationSupplier.get();
   }
 
   /**
@@ -390,7 +446,7 @@ public class SwerveSubsystem extends SubsystemBase {
    *     front right, back left, back right
    */
   public void setModuleStates(SwerveModuleState[] states) {
-    setModuleStates(states);
+    drivetrain.setModuleStates(states);
   }
 
   /**
@@ -423,8 +479,8 @@ public class SwerveSubsystem extends SubsystemBase {
    */
   public void resetPosition(Pose2d desiredPosition) {
     orientation = desiredPosition.getRotation();
-    rawOrientationOffset = orientation.minus(rawOrientation);
-    rawOrientationOffsetLog.append(rawOrientationOffset.getDegrees());
+    rawOrientationOffset = MathUtil.angleModulus(orientation.getRadians() - rawOrientation);
+    rawOrientationOffsetLog.append(Math.toDegrees(rawOrientationOffset));
 
     odometry.resetPosition(getOrientation(), drivetrain.getModulesPositions(), desiredPosition);
   }

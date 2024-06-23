@@ -24,20 +24,30 @@ import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardLayout;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.RobotConstants;
-import frc.robot.parameters.MotorParameters;
+import frc.robot.parameters.IndexerParameters;
 
-@RobotPreferencesLayout(groupName = "Indexer+Intake", column = 0, row = 1, width = 1, height = 2)
+@RobotPreferencesLayout(groupName = "Indexer+Intake", column = 6, row = 0, width = 1, height = 4)
 public class IndexerSubsystem extends SubsystemBase {
 
-  public static double GEAR_RATIO = 3 * 26 / 15;
-  public static double INDEXER_DIAMETER = 0.033; // Diameter in meters
+  @RobotPreferencesValue
+  public static RobotPreferences.EnumValue<IndexerParameters> PARAMETERS =
+      new RobotPreferences.EnumValue<IndexerParameters>(
+          "Indexer+Intake", "Indexer", IndexerParameters.PracticeBase2024);
+
+  public static final double GEAR_RATIO = PARAMETERS.getValue().getGearRatio();
+  public static final double INDEXER_DIAMETER = PARAMETERS.getValue().getDiameter();
   public static double ENCODER_CONVERSION_FACTOR = (Math.PI * INDEXER_DIAMETER) / GEAR_RATIO;
 
   public static double MAX_VELOCITY =
-      (MotorParameters.NeoV1_1.getFreeSpeedRPM() * Math.PI * INDEXER_DIAMETER) / (GEAR_RATIO * 60);
+      (PARAMETERS.getValue().getMotorParameters().getFreeSpeedRPM() * Math.PI * INDEXER_DIAMETER)
+          / (GEAR_RATIO * 60);
   public static double MAX_ACCELERATION =
-      (2 * MotorParameters.NeoV1_1.getStallTorque() * GEAR_RATIO * Math.PI * INDEXER_DIAMETER)
-          / RobotConstants.INDEXER_MASS;
+      (2
+              * PARAMETERS.getValue().getMotorParameters().getStallTorque()
+              * GEAR_RATIO
+              * Math.PI
+              * INDEXER_DIAMETER)
+          / PARAMETERS.getValue().getMass();
 
   public static double KS = 0.15;
   public static double KV = (RobotConstants.MAX_BATTERY_VOLTAGE - KS) / MAX_VELOCITY;
@@ -51,7 +61,20 @@ public class IndexerSubsystem extends SubsystemBase {
   public static final RobotPreferences.DoubleValue FEED_VELOCITY =
       new RobotPreferences.DoubleValue("Indexer+Intake", "Indexer Feed Velocity", 3.0);
 
-  private boolean noteDetected = false;
+  @RobotPreferencesValue
+  public static final RobotPreferences.DoubleValue AMP_OUTAKE_VELOCITY =
+      new RobotPreferences.DoubleValue("Indexer+Intake", "Amp Outake Velocity", 3.0);
+
+  @RobotPreferencesValue
+  public static final RobotPreferences.DoubleValue AUTO_CENTER_VELOCITY =
+      new RobotPreferences.DoubleValue("Indexer+Intake", "Auto Center Velocity", 2.0);
+
+  @RobotPreferencesValue
+  public static final RobotPreferences.BooleanValue HAS_LOWER_BEAM_BREAK =
+      new RobotPreferences.BooleanValue("Indexer+Intake", "Has Lower Beam Break", true);
+
+  private boolean noteBreakingUpperBeam = false;
+  private boolean noteBreakingLowerBeam = false;
   private boolean isEnabled = false;
   private double goalVelocity = 0;
   private double currentVelocity = 0;
@@ -59,40 +82,75 @@ public class IndexerSubsystem extends SubsystemBase {
   private final CANSparkMax motor =
       new CANSparkMax(RobotConstants.CAN.SparkMax.INDEXER_PORT, MotorType.kBrushless);
   private final RelativeEncoder encoder = motor.getEncoder();
-  private final SparkLimitSwitch beamBreak = motor.getForwardLimitSwitch(Type.kNormallyOpen);
+  private final SparkLimitSwitch upperBeamBreak = motor.getForwardLimitSwitch(Type.kNormallyOpen);
+  private final SparkLimitSwitch lowerBeamBreak = motor.getReverseLimitSwitch(Type.kNormallyOpen);
   private final SimpleMotorFeedforward indexerFeedfoward = new SimpleMotorFeedforward(KS, KV, KA);
 
-  private final BooleanLogEntry noteDetectedLogger =
-      new BooleanLogEntry(DataLogManager.getLog(), "Indexer Note Detector");
+  private final BooleanLogEntry noteAtShootPositionLogger =
+      new BooleanLogEntry(DataLogManager.getLog(), "Indexer/Note At Shoot Position");
+  private final BooleanLogEntry noteAtEntryLogger =
+      new BooleanLogEntry(DataLogManager.getLog(), "Indexer/Note At Entry");
   private final DoubleLogEntry goalVelocityLogger =
       new DoubleLogEntry(DataLogManager.getLog(), "Indexer/Goal Velocity");
 
   /** Creates a new IndexerSubsystem. */
   public IndexerSubsystem() {
     motor.setIdleMode(IdleMode.kBrake);
-    motor.setInverted(true);
+    motor.setInverted(PARAMETERS.getValue().getInverted());
     encoder.setVelocityConversionFactor(ENCODER_CONVERSION_FACTOR);
     encoder.setPositionConversionFactor(ENCODER_CONVERSION_FACTOR);
-    beamBreak.enableLimitSwitch(false);
+    upperBeamBreak.enableLimitSwitch(false);
+    lowerBeamBreak.enableLimitSwitch(false);
   }
 
-  public boolean isNoteDetected() {
-    return noteDetected;
+  /**
+   * Returns whether the note is at the shoot position (upper beam break is broken).
+   *
+   * @return
+   */
+  public boolean isNoteBreakingUpperBeam() {
+    return noteBreakingUpperBeam;
+  }
+
+  /**
+   * Returns whether the note is at the entry of the indexer (lower beam break is broken).
+   *
+   * @return
+   */
+  public boolean isNoteBreakingLowerBeam() {
+    return noteBreakingLowerBeam;
+  }
+
+  public boolean isNoteBreakingEitherBeam() {
+    return noteBreakingUpperBeam || noteBreakingLowerBeam;
   }
 
   public void feed() {
-    isEnabled = true;
-    goalVelocity = FEED_VELOCITY.getValue();
+    intake(FEED_VELOCITY.getValue());
   }
 
   public void intake() {
-    isEnabled = true;
-    goalVelocity = IntakeSubsystem.INTAKE_VELOCITY.getValue();
+    intake(IntakeSubsystem.INTAKE_VELOCITY.getValue());
   }
 
   public void outtake() {
+    outtake(IntakeSubsystem.INTAKE_VELOCITY.getValue());
+  }
+
+  public void intake(double velocity) {
     isEnabled = true;
-    goalVelocity = -IntakeSubsystem.INTAKE_VELOCITY.getValue();
+    goalVelocity = velocity;
+  }
+
+  /** Outtake at the absolute given velocity. */
+  public void outtake(double velocity) {
+    isEnabled = true;
+    goalVelocity = -Math.abs(velocity);
+  }
+
+  public void outtakeToAmp() {
+    isEnabled = true;
+    goalVelocity = -IndexerSubsystem.AMP_OUTAKE_VELOCITY.getValue();
   }
 
   public void disable() {
@@ -108,10 +166,16 @@ public class IndexerSubsystem extends SubsystemBase {
   @Override
   public void periodic() {
     // This method will be called once per scheduler run
-    boolean noteDetected = beamBreak.isPressed();
-    if (this.noteDetected != noteDetected) {
-      noteDetectedLogger.append(noteDetected);
-      this.noteDetected = noteDetected;
+    boolean noteBreakingUpperBeam = upperBeamBreak.isPressed();
+    if (this.noteBreakingUpperBeam != noteBreakingUpperBeam) {
+      noteAtShootPositionLogger.append(noteBreakingUpperBeam);
+      this.noteBreakingUpperBeam = noteBreakingUpperBeam;
+    }
+
+    boolean noteBreakingLowerBeam = lowerBeamBreak.isPressed();
+    if (this.noteBreakingLowerBeam != noteBreakingLowerBeam) {
+      noteAtEntryLogger.append(noteBreakingLowerBeam);
+      this.noteBreakingLowerBeam = noteBreakingLowerBeam;
     }
 
     currentVelocity = encoder.getVelocity();
@@ -140,6 +204,7 @@ public class IndexerSubsystem extends SubsystemBase {
     layout.addDouble("Goal Velocity", () -> goalVelocity);
     layout.addDouble("Current Velocity", () -> currentVelocity);
     layout.addBoolean("Enabled", () -> isEnabled);
-    layout.addBoolean("Note Detected", () -> noteDetected);
+    layout.addBoolean("Upper Note Detected", () -> noteBreakingUpperBeam);
+    layout.addBoolean("Lower Note Detected", () -> noteBreakingLowerBeam);
   }
 }

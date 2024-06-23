@@ -3,25 +3,25 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 1.4642586550130365,
-        "y": 1.4851576141898728
+        "x": 0.7398459580634182,
+        "y": 4.365758146274563
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.305334010668021,
-        "y": 1.4013081026162058
+        "x": 1.5796876892481544,
+        "y": 3.270631724469556
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 3.69,
-        "y": 2.6
+        "x": 2.54,
+        "y": 3.33
       },
       "prevControl": {
-        "x": 3.3184404368808735,
-        "y": 1.8148209296418614
+        "x": 1.7205030438050701,
+        "y": 3.267988587427557
       },
       "nextControl": null,
       "isLocked": false,
@@ -47,24 +47,41 @@
           ]
         }
       }
+    },
+    {
+      "name": "Set RPM",
+      "waypointRelativePos": 0.2,
+      "command": {
+        "type": "parallel",
+        "data": {
+          "commands": [
+            {
+              "type": "named",
+              "data": {
+                "name": "SetShooterRPMSourceFarShot"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "globalConstraints": {
-    "maxVelocity": 3.0,
-    "maxAcceleration": 3.0,
+    "maxVelocity": 5.0,
+    "maxAcceleration": 5.0,
     "maxAngularVelocity": 540.0,
     "maxAngularAcceleration": 720.0
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -38.21058379558257,
+    "rotation": -40.0,
     "rotateFast": false
   },
   "reversed": false,
   "folder": "Source Sweep",
   "previewStartingState": {
-    "rotation": 0,
+    "rotation": -60.945395900922804,
     "velocity": 0
   },
-  "useDefaultConstraints": true
+  "useDefaultConstraints": false
 }

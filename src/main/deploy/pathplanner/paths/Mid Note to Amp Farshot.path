@@ -3,57 +3,41 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 2.62,
-        "y": 5.65
+        "x": 8.12,
+        "y": 4.16
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.150693114055268,
-        "y": 5.407315003716603
+        "x": 7.434704742183022,
+        "y": 4.010648631984287
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 1.81,
-        "y": 5.268362233047124
+        "x": 5.398047233753502,
+        "y": 4.16
       },
       "prevControl": {
-        "x": 2.125456967402666,
-        "y": 5.502078857064002
+        "x": 6.181377044687932,
+        "y": 3.7913162849226465
       },
       "nextControl": {
-        "x": 1.7817466503580108,
-        "y": 5.247429813801917
+        "x": 5.083346061781186,
+        "y": 4.308117939088191
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 1.81,
-        "y": 4.703547058339669
+        "x": 4.35,
+        "y": 5.55
       },
       "prevControl": {
-        "x": 1.7169286631486573,
-        "y": 4.975709353920232
-      },
-      "nextControl": {
-        "x": 1.8333111873815688,
-        "y": 4.635379709668079
-      },
-      "isLocked": false,
-      "linkedName": null
-    },
-    {
-      "anchor": {
-        "x": 2.62,
-        "y": 4.3
-      },
-      "prevControl": {
-        "x": 2.4359350578819248,
-        "y": 4.313054703502887
+        "x": 4.46849585811131,
+        "y": 4.908866815189101
       },
       "nextControl": null,
       "isLocked": false,
@@ -64,8 +48,8 @@
   "constraintZones": [],
   "eventMarkers": [
     {
-      "name": "Stow angle",
-      "waypointRelativePos": 0.30000000000000004,
+      "name": "Auto Center Note",
+      "waypointRelativePos": 0,
       "command": {
         "type": "parallel",
         "data": {
@@ -73,24 +57,13 @@
             {
               "type": "named",
               "data": {
-                "name": "StowArm"
+                "name": "AutoCenterNote"
               }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "intake",
-      "waypointRelativePos": 1.85,
-      "command": {
-        "type": "parallel",
-        "data": {
-          "commands": [
+            },
             {
               "type": "named",
               "data": {
-                "name": "Intake"
+                "name": "SetShooterRPMAmpFarShot"
               }
             }
           ]
@@ -106,11 +79,11 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -30.34324888423958,
+    "rotation": 0,
     "rotateFast": false
   },
   "reversed": false,
-  "folder": "Spike Sweep",
+  "folder": "Mid Amp Sweep",
   "previewStartingState": {
     "rotation": 0,
     "velocity": 0

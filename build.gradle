@@ -9,7 +9,7 @@ buildscript {
 
 plugins {
     id "java"
-    id "edu.wpi.first.GradleRIO" version "2024.3.1"
+    id "edu.wpi.first.GradleRIO" version "2024.3.2"
     id "com.diffplug.spotless"  version "6.25.0"
 }
 
@@ -94,7 +94,7 @@ dependencies {
     nativeRelease wpi.java.vendor.jniRelease(wpi.platforms.desktop)
     simulationRelease wpi.sim.enableRelease()
 
-    implementation 'com.nrg948:nrgcommon:2024.1.2-SNAPSHOT'
+    implementation 'com.nrg948:nrgcommon:2024.3.1'
 }
 
 test {

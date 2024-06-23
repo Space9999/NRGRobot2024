@@ -14,7 +14,7 @@
         {
           "type": "named",
           "data": {
-            "name": "ShootSubwooferSideShot"
+            "name": "ShootSubwooferShot"
           }
         },
         {
@@ -30,11 +30,11 @@
               {
                 "type": "wait",
                 "data": {
-                  "waitTime": 5.0
+                  "waitTime": 2.0
                 }
               },
               {
-                "type": "sequential",
+                "type": "deadline",
                 "data": {
                   "commands": [
                     {
@@ -46,19 +46,31 @@
                     {
                       "type": "named",
                       "data": {
-                        "name": "SetArmAngleSpikeShot"
+                        "name": "AutoOrientToSpeaker"
                       }
                     },
                     {
                       "type": "named",
                       "data": {
-                        "name": "ShootSpikeShot"
+                        "name": "SetShooterContinuous"
+                      }
+                    },
+                    {
+                      "type": "wait",
+                      "data": {
+                        "waitTime": 2.0
                       }
                     }
                   ]
                 }
               }
             ]
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ShootAtCurrentRPM"
           }
         },
         {
@@ -80,7 +92,7 @@
               {
                 "type": "named",
                 "data": {
-                  "name": "IntakeUntilNoteDetected"
+                  "name": "IntakeUntilNoteDetectedNoAutoCentering"
                 }
               }
             ]
@@ -130,7 +142,7 @@
               {
                 "type": "named",
                 "data": {
-                  "name": "IntakeUntilNoteDetected"
+                  "name": "IntakeUntilNoteDetectedNoAutoCentering"
                 }
               }
             ]

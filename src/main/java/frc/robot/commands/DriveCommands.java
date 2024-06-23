@@ -8,10 +8,12 @@ package frc.robot.commands;
 
 import com.nrg948.preferences.RobotPreferences;
 import com.nrg948.preferences.RobotPreferencesValue;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
@@ -19,21 +21,31 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.Constants.RobotConstants;
 import frc.robot.subsystems.AprilTagSubsystem;
+import frc.robot.subsystems.NoteVisionSubsystem;
+import frc.robot.subsystems.PhotonVisionSubsystemBase;
 import frc.robot.subsystems.Subsystems;
 import frc.robot.subsystems.SwerveSubsystem;
 import java.util.Map;
 import java.util.Optional;
+import org.photonvision.targeting.PhotonTrackedTarget;
 
 public final class DriveCommands {
-  @RobotPreferencesValue
+
+  public static Rotation2d ROTATE_180_DEGREES = Rotation2d.fromDegrees(180);
+
+  @RobotPreferencesValue(column = 1, row = 1)
   public static final RobotPreferences.BooleanValue USE_ESTIMATED_POSE =
       new RobotPreferences.BooleanValue("AprilTag", "Use Estimated Pose", false);
 
   /** Returns a Command that drives to amp delivery position. */
   public static Command driveToAmp(Subsystems subsystems) {
 
+    if (subsystems.aprilTag.isEmpty()) {
+      return Commands.none(); // TODO blink LEDS red to tell driver we can't see the target
+    }
+
     var drivetrain = subsystems.drivetrain;
-    var aprilTag = subsystems.aprilTag;
+    var aprilTag = subsystems.aprilTag.get();
 
     var targetID = AprilTagSubsystem.getAmpAprilTagID();
     var targetOptional = aprilTag.getTarget(targetID);
@@ -83,13 +95,104 @@ public final class DriveCommands {
     return Commands.select(
         Map.of(
             Alliance.Blue,
-                Commands.runOnce(() -> drivetrain.resetOrientation(new Rotation2d()), drivetrain),
+            Commands.runOnce(() -> drivetrain.resetOrientation(new Rotation2d()), drivetrain),
             Alliance.Red,
-                Commands.runOnce(
-                    () -> drivetrain.resetOrientation(Rotation2d.fromDegrees(180)), drivetrain)),
+            Commands.runOnce(
+                () -> drivetrain.resetOrientation(Rotation2d.fromDegrees(180)), drivetrain)),
         () -> {
           Optional<Alliance> alliance = DriverStation.getAlliance();
           return alliance.orElse(Alliance.Blue);
         });
+  }
+
+  public static Command enablePoseEstimation(Subsystems subsystems, boolean enable) {
+    Optional<AprilTagSubsystem> aprilTag = subsystems.aprilTag;
+    return Commands.runOnce(
+        () -> {
+          if (aprilTag.isPresent()) {
+            Subsystems.ENABLE_POSE_ESTIMATION.setValue(enable);
+          }
+        });
+  }
+
+  /**
+   * Returns a command that enables auto orientation to the current alliance speaker.
+   *
+   * @param subsystems The subsystem container.
+   * @return
+   */
+  public static Command autoOrientToSpeaker(Subsystems subsystems) {
+    SwerveSubsystem drivetrain = subsystems.drivetrain;
+    Optional<AprilTagSubsystem> aprilTag = subsystems.aprilTag;
+    return Commands.runOnce(
+        () -> {
+          if (aprilTag.isPresent()) {
+            drivetrain.enableAutoOrientation(
+                () -> {
+                  Optional<PhotonTrackedTarget> target = aprilTag.get().getSpeakerCenterAprilTag();
+
+                  if (target.isPresent()) {
+                    // The speaker center AprilTag is visible, so use the relative angle reported by
+                    // PhotonVision to determine the desired heading.
+                    double angle = PhotonVisionSubsystemBase.calculateAngleToTarget(target.get());
+                    double currentOrientation = drivetrain.getOrientation().getRadians();
+                    double targetOrientation = MathUtil.angleModulus(currentOrientation + angle);
+
+                    return Optional.of(new Rotation2d(targetOrientation));
+                  } else {
+                    // The speaker center AprilTag is not visible, so orient the robot to the
+                    // absolute location relative to the current estimated robot pose.
+                    Translation2d aprilTagLocation =
+                        subsystems
+                            .aprilTag
+                            .get()
+                            .getSpeakerCenterAprilTagPose()
+                            .toPose2d()
+                            .getTranslation();
+                    return Optional.of(
+                        aprilTagLocation
+                            .minus(drivetrain.getPosition().getTranslation())
+                            .getAngle()
+                            .rotateBy(ROTATE_180_DEGREES));
+                  }
+                });
+          }
+        });
+  }
+
+  /**
+   * Returns a command to enable auto orient to note mode.
+   *
+   * @param subsystems The subsystems container.
+   * @return
+   */
+  public static Command autoOrientToNote(Subsystems subsystems) {
+    SwerveSubsystem drivetrain = subsystems.drivetrain;
+    Optional<NoteVisionSubsystem> noteVision = subsystems.noteVision;
+    return Commands.runOnce(
+        () -> {
+          if (noteVision.isPresent()) {
+            drivetrain.enableAutoOrientation(
+                () -> {
+                  double currentOrientation = drivetrain.getOrientation().getRadians();
+                  double angleToTarget = Math.toRadians(noteVision.get().getAngleToBestTarget());
+                  double targetOrientation =
+                      MathUtil.angleModulus(angleToTarget + currentOrientation);
+
+                  return Optional.of(new Rotation2d(targetOrientation));
+                });
+          }
+        });
+  }
+
+  /**
+   * Returns a command that disables auto orientation.
+   *
+   * @param subsystems The subsystems container.
+   * @return
+   */
+  public static Command disableAutoOrientation(Subsystems subsystems) {
+    SwerveSubsystem drivetrain = subsystems.drivetrain;
+    return Commands.runOnce(() -> drivetrain.disableAutoOrientation());
   }
 }

@@ -39,7 +39,15 @@ import org.photonvision.PhotonPoseEstimator.PoseStrategy;
 import org.photonvision.targeting.PhotonTrackedTarget;
 
 /** This subsystem is responsible for getting target information from PhotonVision. */
-@RobotPreferencesLayout(groupName = "AprilTag", row = 0, column = 3, width = 1, height = 4)
+@RobotPreferencesLayout(
+    groupName = "AprilTag",
+    column = 2,
+    row = 2,
+    width = 2,
+    height = 2,
+    type = "Grid Layout",
+    gridColumns = 2,
+    gridRows = 2)
 public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
   public static final Matrix<N3, N1> SINGLE_TAG_STD_DEVS = VecBuilder.fill(4, 4, 8);
   public static final Matrix<N3, N1> MULTI_TAG_STD_DEVS = VecBuilder.fill(0.5, 0.5, 1);
@@ -47,8 +55,12 @@ public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
   public static EstimatedRobotPose NO_APRILTAG_ESTIMATE =
       new EstimatedRobotPose(NO_APRILTAG, 0, List.of(), PoseStrategy.LOWEST_AMBIGUITY);
 
-  @RobotPreferencesValue
-  public static final RobotPreferences.BooleanValue enableTab =
+  @RobotPreferencesValue(column = 0, row = 0)
+  public static final RobotPreferences.BooleanValue ENABLED =
+      new RobotPreferences.BooleanValue("AprilTag", "Enabled", false);
+
+  @RobotPreferencesValue(column = 1, row = 0)
+  public static final RobotPreferences.BooleanValue ENABLE_TAB =
       new RobotPreferences.BooleanValue("AprilTag", "Enable Tab", false);
 
   private final PhotonPoseEstimator estimator;
@@ -174,19 +186,54 @@ public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
     if (target.isEmpty()) {
       return 0.0;
     }
-    return target.get().getYaw();
+    return calculateAngleToTarget(target.get());
   }
 
+  /**
+   * Returns the ID of the center speaker APrilTag based on the alliance.
+   *
+   * @return The center speaker AprilTag ID.
+   */
   public static int getSpeakerCenterAprilTagID() {
     var alliance = DriverStation.getAlliance().get();
     return alliance == Alliance.Red ? 4 : 7;
   }
 
+  /**
+   * Returns the speaker center AprilTag.
+   *
+   * @return A non empty Optional value if we detect specified AprilTag. Otherwise returns
+   *     Optional.empty.
+   */
+  public Optional<PhotonTrackedTarget> getSpeakerCenterAprilTag() {
+    return getTarget(getSpeakerCenterAprilTagID());
+  }
+
+  /**
+   * Returns the pose of the center speaker AprilTag based on alliance.
+   *
+   * @return The center speaker AprilTag pose.
+   */
+  public Pose3d getSpeakerCenterAprilTagPose() {
+    return getAprilTagPose(getSpeakerCenterAprilTagID());
+  }
+
+  /**
+   * Returns the ID of the AMP AprilTag based on alliance.
+   *
+   * @return The AMP AprilTag ID.
+   */
   public static int getAmpAprilTagID() {
     var alliance = DriverStation.getAlliance().get();
     return alliance == Alliance.Red ? 5 : 6;
   }
 
+  /**
+   * Return the pose of the specified AprilTag.
+   *
+   * @param id The ID of the AprilTag.
+   * @return The pose of the AprilTag.
+   */
   public Pose3d getAprilTagPose(int id) {
     return aprilTagLayout.getTagPose(id).orElse(NO_APRILTAG);
   }
@@ -194,15 +241,18 @@ public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
   @Override
   public void periodic() {
     super.periodic();
+
     estimator.update(getLatestResult());
 
-    selectedAprilTag = aprilTagIdChooser.getSelected().intValue();
-    selectedAprilTagPose = getAprilTagPose(selectedAprilTag);
+    if (ENABLE_TAB.getValue()) {
+      selectedAprilTag = aprilTagIdChooser.getSelected().intValue();
+      selectedAprilTagPose = getAprilTagPose(selectedAprilTag);
+    }
   }
 
   /** Adds a tab for April Tag in Shuffleboard. */
   public void addShuffleboardTab() {
-    if (!enableTab.getValue()) {
+    if (!ENABLE_TAB.getValue()) {
       return;
     }
 
@@ -216,8 +266,8 @@ public class AprilTagSubsystem extends PhotonVisionSubsystemBase {
 
     VideoSource video =
         new HttpCamera(
-            "photonvision_Port_1184_Output_MJPEG_Server",
-            "http://photonvision.local:1184/?action=stream",
+            "photonvision_Port_1182_Output_MJPEG_Server",
+            "http://photonvision.local:1182/?action=stream",
             HttpCameraKind.kMJPGStreamer);
     visionTab
         .add("April Tag", video)

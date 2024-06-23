@@ -2,8 +2,8 @@
   "version": 1.0,
   "startingPose": {
     "position": {
-      "x": 1.46,
-      "y": 1.49
+      "x": 1.4,
+      "y": 1.61
     },
     "rotation": 0
   },
@@ -14,7 +14,13 @@
         {
           "type": "path",
           "data": {
-            "pathName": "Amp Test Path"
+            "pathName": "MOP Start to Center Line"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "MOP Source to Amp Center Line"
           }
         }
       ]

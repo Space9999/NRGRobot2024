@@ -3,51 +3,101 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 7.867081534163068,
+        "x": 8.2,
         "y": 0.791376682753368
       },
       "prevControl": null,
       "nextControl": {
-        "x": 5.790111760223521,
-        "y": 0.8851181102362238
+        "x": 6.179299732375018,
+        "y": 0.7913766827533683
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 3.69,
-        "y": 2.596102286221667
+        "x": 4.61,
+        "y": 1.55
       },
       "prevControl": {
-        "x": 4.352222504445009,
-        "y": 2.0319151638303294
+        "x": 5.586046388377764,
+        "y": 1.1384393252247067
+      },
+      "nextControl": {
+        "x": 3.8083804747101895,
+        "y": 1.8880116730821161
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 2.54,
+        "y": 3.33
+      },
+      "prevControl": {
+        "x": 2.87050304380507,
+        "y": 2.913986896676084
       },
       "nextControl": null,
       "isLocked": false,
       "linkedName": null
     }
   ],
-  "rotationTargets": [],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.5,
+      "rotationDegrees": -22.714294654285982,
+      "rotateFast": false
+    }
+  ],
   "constraintZones": [],
   "eventMarkers": [
     {
-      "name": "Prepare to Shoot",
-      "waypointRelativePos": 0.3,
+      "name": "Auto Center",
+      "waypointRelativePos": 0.1,
       "command": {
-        "type": "parallel",
+        "type": "sequential",
         "data": {
           "commands": [
             {
               "type": "named",
               "data": {
-                "name": "SetArmAngleSourceFarShot"
+                "name": "AutoCenterNote"
               }
-            },
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Prepare To Shoot",
+      "waypointRelativePos": 1.2,
+      "command": {
+        "type": "sequential",
+        "data": {
+          "commands": [
             {
               "type": "named",
               "data": {
-                "name": "SetShooterRPMSourceFarShot"
+                "name": "SetShooterContinuous"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Auto Orienting",
+      "waypointRelativePos": 1.4,
+      "command": {
+        "type": "sequential",
+        "data": {
+          "commands": [
+            {
+              "type": "named",
+              "data": {
+                "name": "AutoOrientToSpeaker"
               }
             }
           ]
@@ -56,14 +106,14 @@
     }
   ],
   "globalConstraints": {
-    "maxVelocity": 3.0,
-    "maxAcceleration": 3.0,
+    "maxVelocity": 5.0,
+    "maxAcceleration": 5.0,
     "maxAngularVelocity": 540.0,
     "maxAngularAcceleration": 720.0
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -39.26879803110824,
+    "rotation": -47.0,
     "rotateFast": false
   },
   "reversed": false,
@@ -72,5 +122,5 @@
     "rotation": 0,
     "velocity": 0
   },
-  "useDefaultConstraints": true
+  "useDefaultConstraints": false
 }

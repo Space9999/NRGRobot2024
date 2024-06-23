@@ -6,14 +6,17 @@
  */
 package frc.robot;
 
-import static frc.robot.Constants.ColorConstants.ORANGE;
+import static frc.robot.Constants.ColorConstants.GREEN;
+import static frc.robot.Constants.ColorConstants.PINK;
 import static frc.robot.Constants.ColorConstants.RED;
 
 import com.nrg948.preferences.RobotPreferences;
 import com.nrg948.preferences.RobotPreferencesLayout;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj.shuffleboard.BuiltInLayouts;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardLayout;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -21,6 +24,8 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.RobotConstants.OperatorConstants;
 import frc.robot.commands.ArmCommands;
+import frc.robot.commands.Autos;
+import frc.robot.commands.ClimberCommands;
 import frc.robot.commands.DriveCommands;
 import frc.robot.commands.DriveUsingController;
 import frc.robot.commands.InterruptAll;
@@ -30,7 +35,10 @@ import frc.robot.commands.Pathfinding;
 import frc.robot.commands.SetShooterContinous;
 import frc.robot.subsystems.ArmSubsystem;
 import frc.robot.subsystems.IndexerSubsystem;
+import frc.robot.subsystems.ShooterSubsystem;
+import frc.robot.subsystems.StatusLEDSubsystem;
 import frc.robot.subsystems.Subsystems;
+import java.util.Map;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -81,31 +89,58 @@ public class RobotContainer {
    * joysticks}.
    */
   private void configureBindings() {
+    ShooterSubsystem shooter = subsystems.shooter;
+    IndexerSubsystem indexer = subsystems.indexer;
+    StatusLEDSubsystem statusLED = subsystems.statusLED;
+
     driverController.start().onTrue(DriveCommands.resetOrientation(subsystems));
     driverController.back().onTrue(new InterruptAll(subsystems));
     driverController.a().onTrue(Pathfinding.pathFindToSpeakerFront());
-    driverController.b().whileTrue(Pathfinding.pathFindToAmp());
+    driverController.b().onTrue(DriveCommands.autoOrientToSpeaker(subsystems));
+    driverController.b().onFalse(DriveCommands.disableAutoOrientation(subsystems));
+    driverController.x().onTrue(DriveCommands.autoOrientToNote(subsystems));
+    driverController.x().onFalse(DriveCommands.disableAutoOrientation(subsystems));
     driverController.y().whileTrue(Pathfinding.pathFindToAmp2());
+    driverController.leftBumper().whileTrue(ClimberCommands.manualClimbChain(subsystems));
+    driverController.rightBumper().whileTrue(ClimberCommands.manualClimbDownChain(subsystems));
 
+    // operatorController
+    //     .start()
+    //     .onTrue(
+    //         NoteCommands.prepareToShoot(
+    //             subsystems,
+    //             Autos.SPIKE_SHOT_RPM.getValue(),
+    //             Math.toRadians(Autos.SPIKE_SHOT_ANGLE.getValue())));
+    operatorController
+        .povUp()
+        .whileTrue(NoteCommands.shootAtCurrentRPM(subsystems).finallyDo(shooter::disable));
+    operatorController.povDown().whileTrue(NoteCommands.outtake(subsystems));
+    // operatorController.povRight().whileTrue(NoteCommands.outakeToAmp(subsystems));
+    operatorController.povRight().whileTrue(NoteCommands.shoot(subsystems, 800));
+    operatorController.povLeft().onTrue(ArmCommands.seekToAngle(subsystems, Math.toRadians(15)));
     operatorController.back().onTrue(new InterruptAll(subsystems));
     operatorController.b().whileTrue(new SetShooterContinous(subsystems));
-    operatorController.povUp().onTrue(ArmCommands.seekToTrap(subsystems));
-    operatorController.povRight().onTrue(ArmCommands.seekToAmp(subsystems));
-    operatorController.povDown().onTrue(ArmCommands.stow(subsystems));
-    operatorController.povLeft().onTrue(ArmCommands.disableSeek(subsystems));
-    operatorController.leftBumper().whileTrue(NoteCommands.autoCenterNote(subsystems));
-    operatorController.rightBumper().whileTrue(NoteCommands.intakeUntilNoteDetected(subsystems));
-    operatorController.leftTrigger().whileTrue(NoteCommands.outtake(subsystems));
+    // operatorController.b().whileTrue(new SetShooterContinous(subsystems));
     operatorController
-        .rightTrigger()
-        .whileTrue(
-            Commands.sequence(
-                NoteCommands.intakeUntilNoteDetected(subsystems, false),
-                NoteCommands.autoCenterNote(subsystems)));
+        .start()
+        .onTrue(
+            NoteCommands.prepareToShoot(
+                subsystems, Autos.SUBWOOFER_SHOT_RPM.getValue(), ArmSubsystem.STOWED_ANGLE));
+    operatorController.x().onTrue(ArmCommands.seekToAmp(subsystems));
+    operatorController.y().onTrue(ArmCommands.seekToTrap(subsystems));
+    operatorController.a().onTrue(ArmCommands.stow(subsystems));
+    operatorController.leftBumper().whileTrue(NoteCommands.intakeUntilNoteDetected(subsystems));
+    operatorController.rightBumper().onTrue(NoteCommands.intakeAndAutoCenterNote(subsystems));
 
-    Trigger noteDetected = new Trigger(subsystems.indexer::isNoteDetected);
-    noteDetected.onTrue(LEDs.fillColor(subsystems.addressableLED, ORANGE));
-    noteDetected.onFalse(LEDs.fillColor(subsystems.addressableLED, RED));
+    Trigger noteDetected = new Trigger(indexer::isNoteBreakingEitherBeam);
+    noteDetected.onTrue(
+        Commands.sequence(LEDs.flashColor(statusLED, GREEN), LEDs.fillColor(statusLED, GREEN)));
+    noteDetected.onFalse(LEDs.fillColor(statusLED, RED));
+
+    Trigger shooterSpinning =
+        new Trigger(() -> shooter.atGoalRPM() && indexer.isNoteBreakingEitherBeam());
+    shooterSpinning.onTrue(
+        Commands.sequence(LEDs.flashColor(statusLED, PINK), LEDs.fillColor(statusLED, PINK)));
   }
 
   /**
@@ -114,7 +149,7 @@ public class RobotContainer {
    * @return the command to run in autonomous
    */
   public Command getAutonomousCommand() {
-    return autonomous.getAutonomousCommand();
+    return autonomous.getAutonomousCommand(subsystems);
   }
 
   public void disabledInit() {
@@ -123,6 +158,7 @@ public class RobotContainer {
     subsystems.indexer.disable();
     subsystems.shooter.disable();
     subsystems.arm.disable();
+    subsystems.drivetrain.disableAutoOrientation();
   }
 
   public void disabledPeriodic() {
@@ -141,6 +177,7 @@ public class RobotContainer {
   public void teleopInit() {
     subsystems.drivetrain.setBrakeMode(true);
     subsystems.indexer.setBrakeMode(true);
+    subsystems.drivetrain.disableAutoOrientation();
   }
 
   public void periodic() {
@@ -151,12 +188,25 @@ public class RobotContainer {
     ShuffleboardTab operatorTab = Shuffleboard.getTab("Operator");
 
     autonomous.addShuffleboardLayout(operatorTab);
+    ShuffleboardLayout statusLayout =
+        operatorTab
+            .getLayout("Status", BuiltInLayouts.kGrid)
+            .withProperties(Map.of("Number of columns", 1, "Number of rows", 1))
+            .withPosition(6, 0)
+            .withSize(2, 2);
+    statusLayout.addBoolean("Note Detected", subsystems.indexer::isNoteBreakingUpperBeam);
 
     RobotPreferences.addShuffleBoardTab();
 
     subsystems.drivetrain.addShuffleboardTab();
-    subsystems.aprilTag.addShuffleboardTab();
-    subsystems.noteVision.addShuffleboardTab();
+
+    if (subsystems.aprilTag.isPresent()) {
+      subsystems.aprilTag.get().addShuffleboardTab();
+    }
+
+    if (subsystems.noteVision.isPresent()) {
+      subsystems.noteVision.get().addShuffleboardTab();
+    }
 
     if (ArmSubsystem.ENABLE_TAB.getValue()) {
       ShuffleboardTab armShooterTab = Shuffleboard.getTab("Arm+Shooter");
